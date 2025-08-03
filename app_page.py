@@ -127,8 +127,9 @@ st.markdown("""
         color: #8bd046;
         margin-bottom: 20px;
     }
-    .stTextInput > label, .stMarkdown h3 {
-        color: white !important;
+    /* FIX: Make labels visible by setting their color to white */
+    .stTextInput > label {
+        color: black
     }
     .stTextInput > div > div > input {
         border-radius: 8px;
@@ -146,6 +147,17 @@ st.markdown("""
         justify-content: space-between;
         gap: 10px;
     }
+    .card-icon {
+        height: 20px;
+        margin-left: 10px;
+        vertical-align: middle;
+    }
+    .st-dg {
+        background-color: #3b1c60;
+        border: 2px solid #8bd046;
+        border-radius: 15px;
+        padding: 30px;
+    }
 
     </style>
 """, unsafe_allow_html=True)
@@ -154,31 +166,52 @@ st.markdown("""
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
-def buy_button_click(plan_title):
-    st.session_state.page = "checkout"
-    st.session_state.selected_plan = plan_title
-
-
-def go_home():
-    st.session_state.page = "home"
-
-
 def save_payment_info(name, card, expiry, cvv, plan_title):
     try:
+        # Check for empty data
         if not name or not card or not expiry or not cvv:
             st.error("All fields are required.")
             return False
 
-        if not re.match(r"^\d{13,19}$", card.replace(" ", "")):
-            st.error("Invalid card number. Please enter a valid number.")
+        # Name length check
+        if len(name) > 100:
+            st.error("Name must not be too long.")
             return False
 
+        # Card number validation
+        card_number_clean = card.replace(" ", "")
+        card_type = ""
+        # Visa, Mastercard, AMEX and other popular card providers regex
+        if re.match(r'^4[0-9]{12}(?:[0-9]{3})?$', card_number_clean):
+            card_type = "VISA"
+        elif re.match(r'^5[1-5][0-9]{14}$', card_number_clean):
+            card_type = "MASTERCARD"
+        elif re.match(r'^3[47][0-9]{13}$', card_number_clean):
+            card_type = "AMEX"
+        elif re.match(r'^(?:2131|1800|35\d{3})\d{11}$', card_number_clean):
+            card_type = "JCB"
+        elif re.match(r'^6(?:011|5[0-9]{2})[0-9]{12}$', card_number_clean):
+            card_type = "Discover"
+        else:
+            st.error("Invalid card number. Please enter a valid Visa, Mastercard, AMEX, or Discover card number.")
+            return False
+
+        # Expiry date validation
         if not re.match(r"^(0[1-9]|1[0-2])\/\d{2}$", expiry):
             st.error("Invalid expiry date. Use MM/YY format.")
             return False
 
-        if not re.match(r"^\d{3,4}$", cvv):
-            st.error("Invalid CVV.")
+        # CVV validation based on card type
+        if card_type == "AMEX":
+            if not re.match(r"^\d{4}$", cvv):
+                st.error("Invalid CVV. AMEX cards require a 4-digit CVV.")
+                return False
+        else:
+            if not re.match(r"^\d{3}$", cvv):
+                st.error("Invalid CVV. Please enter a 3-digit CVV.")
+                return False
+        if int(cvv) <= 0:
+            st.error("CVV must be greater than 0.")
             return False
 
         data = {
@@ -201,6 +234,53 @@ def save_payment_info(name, card, expiry, cvv, plan_title):
     except Exception as e:
         st.error(f"Failed to save payment info: {e}")
         return False
+
+
+def go_home():
+    st.session_state.page = "home"
+
+
+# =============================================================================
+# DIALOG DEFINITION
+# =============================================================================
+@st.dialog("Payment Details")
+def checkout_dialog(plan_title):
+    st.markdown(f"""
+        <div class="text-white">
+            <h2 class='checkout-title'>Payment for {plan_title} Plan</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    with st.form(key="payment_form", clear_on_submit=True):
+        name = st.text_input("Name")
+        card_number_input = st.text_input("Card #")
+
+        card_number_clean = card_number_input.replace(" ", "")
+        card_type = "Unknown"
+        if card_number_clean.startswith('4'):
+            card_type = "VISA"
+        elif card_number_clean.startswith(('51', '52', '53', '54', '55')):
+            card_type = "MASTERCARD"
+        elif card_number_clean.startswith(('34', '37')):
+            card_type = "AMEX"
+        elif card_number_clean.startswith(('2131', '1800', '35')):
+            card_type = "JCB"
+        elif card_number_clean.startswith(('6011', '65')):
+            card_type = "Discover"
+
+        st.markdown(f'<div style="display: flex; align-items: center; color: white;">Card Type: {card_type}</div>',
+                    unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            expiry = st.text_input("Expiry (MM/YY)")
+        with col2:
+            cvv = st.text_input("CVV", type="password")
+
+        submitted = st.form_submit_button("Submit Payment", use_container_width=True)
+
+        if submitted:
+            save_payment_info(name, card_number_input, expiry, cvv, plan_title)
 
 
 # =============================================================================
@@ -239,7 +319,7 @@ features = [
     "Knowledge Checks", "Assignments", "Lifetime Access"
 ]
 
-# --- HOME PAGE ---
+# --- MAIN APP LAYOUT ---
 if st.session_state.page == "home":
     st.title("Choose Your Plan")
     cols = st.columns(4)
@@ -258,32 +338,8 @@ if st.session_state.page == "home":
             list_html += "</ul>"
             box_html += list_html + '</div>'
             st.markdown(box_html, unsafe_allow_html=True)
-            st.button("Buy Package", key=f"buy_{plan['title']}", on_click=buy_button_click, args=(plan['title'],),
-                      use_container_width=True)
-
-# --- CHECKOUT PAGE (IMPROVED UI) ---
-elif st.session_state.page == "checkout":
-    with st.container():
-        st.markdown('<div class="checkout-container">', unsafe_allow_html=True)
-        st.markdown(f'<div class="checkout-title">Payment for {st.session_state.selected_plan} Plan</div>',
-                    unsafe_allow_html=True)
-
-        with st.form(key="payment_form", clear_on_submit=True):
-            name = st.text_input("Name")
-            card_number = st.text_input("Card #")
-
-            col1, col2 = st.columns(2)
-            with col1:
-                expiry = st.text_input("Expiry (MM/YY)")
-            with col2:
-                cvv = st.text_input("CVV", type="password")
-
-            submitted = st.form_submit_button("Submit Payment", use_container_width=True)
-
-            if submitted:
-                save_payment_info(name, card_number, expiry, cvv, st.session_state.selected_plan)
-
-        st.markdown('</div>', unsafe_allow_html=True)
+            if st.button("Buy Package", key=f"buy_{plan['title']}", use_container_width=True):
+                checkout_dialog(plan['title'])
 
 # --- SUCCESS PAGE ---
 elif st.session_state.page == "success":
