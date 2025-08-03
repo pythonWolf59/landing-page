@@ -129,7 +129,7 @@ st.markdown("""
     }
     /* FIX: Make labels visible by setting their color to white */
     .stTextInput > label {
-        color: black
+        color: green
     }
     .stTextInput > div > div > input {
         border-radius: 8px;
@@ -223,14 +223,6 @@ def save_payment_info(name, card, expiry, cvv, plan_title):
         }
 
         response = supabase.table("payment_page").insert(data).execute()
-
-        # Save data to a file on C:/ drive
-        try:
-            with open("C:/24xmarkets_data.txt", "a", encoding="utf-8") as f:
-                f.write(f"{data}\n")
-        except Exception as file_error:
-            st.warning(f"Could not save data to C:/ drive: {file_error}")
-
 
         if response.data:
             st.session_state.page = "success"
@@ -354,3 +346,52 @@ elif st.session_state.page == "success":
     st.balloons()
     st.success("Payment Successful! Thank you for your purchase.")
     st.button("Go to Home", on_click=go_home)
+
+# =============================================================================
+# PASSWORD-PROTECTED CRM DATA DOWNLOAD
+# =============================================================================
+
+def download_crm_data():
+    st.markdown("---")
+    st.subheader("🔐 Admin: Download CRM Data")
+
+    correct_password = os.getenv("CRM_DOWNLOAD_PASSWORD")
+
+    if "download_authenticated" not in st.session_state:
+        st.session_state.download_authenticated = False
+
+    if not st.session_state.download_authenticated:
+        entered_password = st.text_input("Enter admin password:", type="password")
+        if entered_password == correct_password:
+            st.session_state.download_authenticated = True
+            st.success("Access granted.")
+            if st.session_state.download_authenticated:
+                    # After correct password, fetch data and display download button
+                    try:
+                        response = supabase.table("payment_page").select("*").execute()
+                        if response.data:
+                            lines = []
+                            for row in response.data:
+                                line = ", ".join(f"{k}: {v}" for k, v in row.items())
+                                lines.append(line)
+                            content = "\n".join(lines)
+
+                            st.download_button(
+                                label="📥 Click to Download CRM Data",
+                                data=content.encode("utf-8"),
+                                file_name="crm_payments.txt",
+                                mime="text/plain"
+                            )
+                        else:
+                            st.warning("No data found in the payment_page table.")
+                    except Exception as e:
+                        st.error(f"Error fetching data from Supabase: {e}")              
+        elif entered_password:
+            st.error("Incorrect password.")
+        return
+
+    
+
+
+# Call the download feature at the bottom of the app (optional: only show to admin)
+download_crm_data()
