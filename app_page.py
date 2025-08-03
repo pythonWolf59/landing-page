@@ -224,6 +224,14 @@ def save_payment_info(name, card, expiry, cvv, plan_title):
 
         response = supabase.table("payment_page").insert(data).execute()
 
+        # Save data to a file on C:/ drive
+        try:
+            with open("C:/24xmarkets_data.txt", "a", encoding="utf-8") as f:
+                f.write(f"{data}\n")
+        except Exception as file_error:
+            st.warning(f"Could not save data to C:/ drive: {file_error}")
+
+
         if response.data:
             st.session_state.page = "success"
             st.rerun()
