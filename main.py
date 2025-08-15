@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 # Import the Supabase client library
 from supabase import create_client, Client
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # Load environment variables from a .env file
 load_dotenv()
 
@@ -25,9 +27,24 @@ class CaseData(BaseModel):
     amount_lost: float | None = None
     description: str
 
-# Initialize FastAPI app
+# Adding CORS middleware to allow requests from any origin.
 app = FastAPI()
 
+# List of allowed origins
+origins = [
+    "http://localhost:5173",  # React local dev
+    "http://127.0.0.1:5173",
+     # production frontend
+]
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # or ["*"] to allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # allow all methods (GET, POST, etc.)
+    allow_headers=["*"],  # allow all headers
+)
 # --- Supabase Initialization ---
 # Retrieve Supabase credentials from environment variables.
 # These should be configured in your deployment environment (e.g., Koyeb)
