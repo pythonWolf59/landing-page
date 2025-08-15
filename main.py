@@ -32,9 +32,9 @@ app = FastAPI()
 
 # List of allowed origins
 origins = [
-    "http://localhost:5173",  # React local dev
+    "http://localhost:5173",  # Vite local dev
     "http://127.0.0.1:5173",
-     # production frontend
+     "https://www.fundhunt.net" # production frontend
 ]
 
 # Add CORS middleware
