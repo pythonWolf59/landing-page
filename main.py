@@ -1,6 +1,7 @@
+# main.py
+
 import os
 import uuid
-from typing import List, Dict, Any
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -16,7 +17,6 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 # Define the data model for the incoming JSON payload.
-# This ensures that the data sent to your API is correctly structured.
 class CaseData(BaseModel):
     first_name: str
     last_name: str
@@ -27,39 +27,40 @@ class CaseData(BaseModel):
     amount_lost: float | None = None
     description: str
 
-# Adding CORS middleware to allow requests from any origin.
 app = FastAPI()
 
-# List of allowed origins
 origins = [
-    "http://localhost:5173",  # Vite local dev
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-     "https://fundhunt.net/" # production frontend
-     "https://landing-page-63fu.onrender.com" # The URL from the error log
+    "https://fundhunt.net/" 
 ]
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # or ["*"] to allow all origins
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # allow all methods (GET, POST, etc.)
-    allow_headers=["*"],  # allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# --- Supabase Initialization ---
-# Retrieve Supabase credentials from environment variables.
-# These should be configured in your deployment environment (e.g., Koyeb)
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
-# Check if credentials are set
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     raise ValueError("Supabase URL and anonymous key must be set as environment variables.")
 
-# Create a Supabase client instance
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-# --- API Endpoint ---
+# --- Add this new handler ---
+@app.options("/data")
+async def options_handler():
+    """
+    Explicitly handles the OPTIONS preflight request.
+    This will ensure a correct response is sent, bypassing the 400 error.
+    """
+    return JSONResponse(content={}, status_code=204) # 204 No Content is standard
+
+# --- Your existing POST endpoint ---
 @app.post("/data")
 async def save_case_data(case_data: CaseData):
     """
@@ -67,24 +68,14 @@ async def save_case_data(case_data: CaseData):
     and returns a unique UUID as a Case ID.
     """
     
-    # Generate a unique UUID for the new case
     case_id = str(uuid.uuid4())
     
-    # Convert the Pydantic model to a dictionary.
-    # The dictionary keys will match the Supabase table column names.
     new_case = case_data.model_dump()
     new_case["case_id"] = case_id
     
     try:
-        # Insert the new case data into the 'cases' table.
-        # The `insert()` method automatically handles creating the new row.
         response = supabase.table("cases").insert(new_case).execute()
 
-        # Check for any errors from the Supabase response
-        # The `execute()` call will raise an exception on an API error,
-        # so this part is more for checking the content.
-        # Note: If the Supabase request itself fails, an exception will be raised,
-        # which is handled by the `except` block.
         if response.data:
             return JSONResponse(content={"case_id": case_id})
         else:
@@ -93,5 +84,4 @@ async def save_case_data(case_data: CaseData):
 
     except Exception as e:
         print(f"An error occurred while saving to Supabase: {e}")
-        # Return a 500 status code with a helpful error message
         raise HTTPException(status_code=500, detail="Failed to save data to Supabase.")
