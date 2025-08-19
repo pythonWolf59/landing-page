@@ -35,6 +35,7 @@ origins = [
     "http://localhost:5173",  # Vite local dev
     "http://127.0.0.1:5173",
      "https://fundhunt.net/" # production frontend
+     "https://landing-page-63fu.onrender.com" # The URL from the error log
 ]
 
 # Add CORS middleware
